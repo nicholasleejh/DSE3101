@@ -3,36 +3,75 @@ wk2-workshop
 Nicholas Lee
 2024-01-24
 
-- [R Markdown](#r-markdown)
-- [Including Plots](#including-plots)
+- [1. Find the following statistics about the S&P
+  returns.](#1-find-the-following-statistics-about-the-sp-returns)
+- [2. Create a plot that shows the prices of S&P in this
+  period.](#2-create-a-plot-that-shows-the-prices-of-sp-in-this-period)
+- [3. Create a plot that shows the total yearly returns of S&P from 2001
+  to
+  2023.](#3-create-a-plot-that-shows-the-total-yearly-returns-of-sp-from-2001-to-2023)
 
-## R Markdown
+### We have 5798 days of data, starting from Jan 3 2001 to Jan 22 2024.
 
-This is an R Markdown document. Markdown is a simple formatting syntax
-for authoring HTML, PDF, and MS Word documents. For more details on
-using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that
-includes both content as well as the output of any embedded R code
-chunks within the document. You can embed an R code chunk like this:
+## 1. Find the following statistics about the S&P returns.
 
 ``` r
-summary(cars)
+df = readRDS("../../../OneDrive - National University of Singapore/Y3S2/DSE3101/data/wk2_stocks.rds")
 ```
 
-    ##      speed           dist       
-    ##  Min.   : 4.0   Min.   :  2.00  
-    ##  1st Qu.:12.0   1st Qu.: 26.00  
-    ##  Median :15.0   Median : 36.00  
-    ##  Mean   :15.4   Mean   : 42.98  
-    ##  3rd Qu.:19.0   3rd Qu.: 56.00  
-    ##  Max.   :25.0   Max.   :120.00
+The cumulative returns of the S&P index during this period is 218.33%.
 
-## Including Plots
+The average daily returns of the S&P index during this period is 0.04%.
 
-You can also embed plots, for example:
+The standard deviation of the daily returns of the S&P index during this
+period is 1.22%.
 
-![](wk2-workshop_files/figure-gfm/pressure-1.png)<!-- -->
+## 2. Create a plot that shows the prices of S&P in this period.
 
-Note that the `echo = FALSE` parameter was added to the code chunk to
-prevent printing of the R code that generated the plot.
+``` r
+library(ggplot2)
+ggplot(data = df, aes(x = date, y = SPY_prices)) +
+  geom_line()
+```
+
+![](wk2-workshop_files/figure-gfm/unnamed-chunk-2-1.png)<!-- -->
+
+## 3. Create a plot that shows the total yearly returns of S&P from 2001 to 2023.
+
+``` r
+library(dplyr)
+```
+
+    ## 
+    ## Attaching package: 'dplyr'
+
+    ## The following objects are masked from 'package:stats':
+    ## 
+    ##     filter, lag
+
+    ## The following objects are masked from 'package:base':
+    ## 
+    ##     intersect, setdiff, setequal, union
+
+``` r
+library(lubridate)
+```
+
+    ## 
+    ## Attaching package: 'lubridate'
+
+    ## The following objects are masked from 'package:base':
+    ## 
+    ##     date, intersect, setdiff, union
+
+``` r
+df %>%
+  mutate(year = year(date)) %>%
+  filter(year >= 2001, year <= 2023) %>%
+  group_by(year) %>%
+  summarise(yearly_returns = sum(SPY_returns)) %>%
+  ggplot(aes(x = year, y = yearly_returns)) +
+  geom_col()
+```
+
+![](wk2-workshop_files/figure-gfm/unnamed-chunk-3-1.png)<!-- -->
