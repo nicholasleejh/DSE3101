@@ -44,4 +44,3 @@ df %>%
   ggplot(aes(x = year, y = yearly_returns)) +
   geom_col()
 ```
-
