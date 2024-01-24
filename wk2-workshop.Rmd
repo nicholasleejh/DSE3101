@@ -33,7 +33,7 @@ ggplot(data = df, aes(x = date, y = SPY_prices)) +
 
 ## 3. Create a plot that shows the total yearly returns of S&P from 2001 to 2023.
 
-```{r}
+```{r message=FALSE}
 library(dplyr)
 library(lubridate)
 df %>%
