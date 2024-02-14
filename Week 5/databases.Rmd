@@ -1,0 +1,306 @@
+---
+title: "Databases"
+output: html_document
+date: "2024-02-14"
+---
+
+```{r setup, include=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(dbplyr)
+library(DBI)
+library(RSQLite)
+library(dbplot)
+library(bigrquery)
+library(Lahman)
+
+# pacman::p_load(tidyverse, #tidyversesuiteofpackages
+#                dbplyr, # usedplyrwithdatabase
+#                DBI, # databaseinterface
+#                RSQLite, # SQLitepackageforR
+#                dbplot, # aggregatedataanduseggplot2 withdatabase
+#                bigrquery, # GoogleBigQuery inR
+#                Lahman) # toydata
+```
+
+## Establish database connection to memory
+```{r}
+# Create and connect to an SQLite database
+lite_con = DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+```
+
+## Copy database to memory from Lahman library
+```{r}
+# Copy remote database to local dataframe
+copy_to(
+ dest = lite_con,
+ df = Lahman::People,
+ name = "people",
+ temporary = FALSE,
+ indexes = list("playerID")
+)
+
+# Show available tables
+dbListTables(lite_con)
+
+# Show available columns
+dbListFields(lite_con, "people")
+```
+
+## Convert database into tibble
+```{r}
+# Acts as a tibble, but actually is SQLite data types that works with tibble functions
+people_db = tbl(lite_con, "people")
+class(people_db)
+head(people_db)
+
+# Select columns
+people_db %>% select(playerID:birthDay,nameFirst:nameLast)
+
+# Filter based on some condition
+people_db %>% filter(birthCountry == "Australia")
+
+# Total number players by birth Country
+people_db %>% count(birthCountry, sort = TRUE)
+
+# Mean height & weight for each birthCountry
+hw_db = people_db %>%
+  # Remove players with unknown birth Country
+  filter(!is.na(birthCountry)) %>%
+  group_by(birthCountry) %>%
+  summarise(mean_weight = mean(weight),
+            mean_height = mean(height),
+            n = n()) %>%
+  arrange(desc(n))
+
+head(hw_db)
+```
+
+## Collect data in actual R from database data type
+```{r}
+# Collect the data back from SQL into R
+df_hw = hw_db %>% collect()
+
+class(df_hw) # Proper R tibble, not SQLite data type
+
+# Plot
+df_hw %>%
+ ggplot(aes(x = mean_weight, y = mean_height, size = n)) +
+ geom_point(alpha = 0.5,show.legend = FALSE)
+```
+
+## SQL code chunk
+```{sql connection = lite_con}
+SELECT playerID, birthYear, birthMonth, birthDay, nameFirst, nameLast
+FROM People
+LIMIT 5
+```
+
+```{sql connection = lite_con}
+/* Count number of rows*/
+SELECT COUNT(*)
+FROM people
+```
+
+```{sql connection = lite_con}
+/* Count distinct values*/
+SELECT COUNT(DISTINCT birthCountry)
+FROM people
+```
+
+```{sql connection = lite_con}
+/*  mutate(new_var = var1 * var2) */
+SELECT weight, height, (weight/(POWER(height, 2)))*703 AS BMI
+FROM people
+LIMIT 5
+```
+
+## DBI, R code chunk, SQL query inside
+```{r}
+DBI::dbGetQuery(lite_con, "SELECT playerID, birthYear, birthMonth, birthDay, nameFirst, nameLast
+FROM People
+LIMIT 5")
+```
+## Copy new database to memory
+```{r}
+copy_to(
+ dest = lite_con,
+ df = Lahman::CollegePlaying,
+ name = "collegeplaying",
+ temporary = FALSE,
+ indexes = list("playerID")
+ )
+
+collegeplaying_db = tbl(lite_con,"collegeplaying")
+
+dbListTables(lite_con)
+
+dbListFields(lite_con, "collegeplaying")
+```
+
+## SQL code practice
+```{sql connection = lite_con}
+SELECT people.playerID, nameFirst, nameLast, schoolID, yearID
+FROM People
+LEFT JOIN collegeplaying
+ON people.playerID = collegeplaying.playerID
+```
+
+```{sql connection = lite_con}
+/* 1. Find all players with first name as “Ken” or “Matty”. */
+SELECT nameFirst, nameLast, nameGiven
+FROM People
+WHERE nameFirst IN ("Ken", "Matty")
+```
+
+```{sql connection = lite_con}
+/* 2. Find all players whose first names contains “mat”. Then show the unique first names that contain “mat”. */
+SELECT DISTINCT nameFirst AS name
+FROM People
+WHERE nameFirst LIKE "%mat%"
+```
+
+```{sql connection = lite_con}
+/* 3. Find all players born in Alaska (AK) or Hawaii (HI) after the year of 1980. Order the result in ascending order of birth year. */
+SELECT nameFirst, nameLast, birthYear, birthState
+FROM People
+WHERE (birthState = "AK" OR birthState = "HI") AND (birthYear > 1980)
+ORDER BY birthYear
+```
+
+```{sql connection = lite_con}
+/* 4. Players in the database can attend more than one college. Find the last college attended by each player. */
+SELECT people.playerID, nameFirst, nameLast, schoolID, yearID
+FROM People
+LEFT JOIN CollegePlaying
+ON people.playerID = collegeplaying.playerID
+GROUP BY people.playerID
+HAVING yearID = MAX(yearID)
+```
+
+```{sql connection = lite_con}
+/* 5. Count the number of unique players who attended Rice University. */
+SELECT COUNT(DISTINCT people.playerID)
+FROM People
+LEFT JOIN CollegePlaying
+ON people.playerID = collegeplaying.playerID
+WHERE schoolID = "rice"
+```
+
+## Disconnect database connection
+```{r}
+DBI::dbDisconnect(lite_con)
+```
+
+## Chinook DB practice
+```{r}
+lite_con = dbConnect(SQLite(), "../data/chinook.db")
+dbListTables(lite_con)
+dbListFields(lite_con, "tracks")
+```
+
+```{sql connection = lite_con}
+/* 1. Find the total number of tracks */
+SELECT COUNT(DISTINCT TrackID)
+FROM tracks
+```
+```{sql connection=lite_con}
+SELECT * FROM genres
+```
+
+```{sql connection = lite_con}
+/* 2. Count the number of tracks by each song genre. Sort by descending count, show top 5.*/
+SELECT genres.Name, COUNT(DISTINCT TrackID) as n
+FROM tracks
+LEFT JOIN genres
+ON tracks.GenreId = genres.GenreId
+GROUP BY tracks.GenreID
+ORDER BY n DESC
+LIMIT 5
+```
+
+```{sql connection = lite_con}
+/* 3. Find the occurrences of unique job titles for the employees */
+SELECT DISTINCT Title
+FROM employees
+```
+
+```{r}
+# 4. Plot the number of job titles for the employees.
+tbl(lite_con, "employees") %>%
+  dbplot_bar(Title) +
+  labs(title = "Employee Title", y = "Count") +
+  theme_classic()
+```
+## Disconnect DB
+```{r}
+dbDisconnect(lite_con)
+```
+
+## Google BigQuery
+```{r}
+# Sys.setenv(PROJECT_ID = "____________")
+
+con = dbConnect(
+  bigrquery::bigquery(),
+  project = "publicdata",
+  dataset = "samples",
+  billing = Sys.getenv("PROJECT_ID")
+)
+
+dbListTables(con)
+
+natality = tbl(con, "natality")
+```
+
+```{r}
+q1 = "SELECT year, month, day, weight_pounds FROM `publicdata.samples.natality`"
+dbGetQuery(con, q1, n = 10)
+```
+
+```{r}
+df_year = natality %>%
+  filter(!is.na(state)) %>%
+  group_by(year) %>%
+  summarize(total_mil= n()/1e6)
+
+df_year
+```
+
+```{r}
+# Total newborns over time
+natality %>%
+  filter(!is.na(state)) %>%
+  group_by(year) %>%
+  dbplot::dbplot_line(year, total_mil = n()/1e6) +
+  theme_minimal() +
+  labs(title = "Total new borns (in millions) over time", x = "", y = "")
+```
+
+```{r}
+# New borns by state
+df_state_year = natality %>%
+  filter(!is.na(state)) %>%
+  group_by(year, state) %>%
+  summarize(total_k = n()/1000)
+
+# Select a few states to highlight
+df_states = df_state_year %>%
+  filter(state %in% c("CA", "TX", "NY", "FL"))
+
+# Plot it
+ggplot(data = df_state_year, aes(x = year, y = total_k, group = state)) +
+  geom_line(col = "grey75", lwd = 0.5) +
+  geom_line(data = df_states, aes(col = state), lwd = 1) +
+  scale_color_brewer(palette = "Set1", name = element_blank()) +
+  labs(title = "New borns (in thousands) by state over time", x = "", y = "") +
+  theme_minimal()
+```
+
+## Disconnect database
+```{r}
+dbDisconnect(con)
+```
